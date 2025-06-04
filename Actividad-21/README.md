@@ -30,7 +30,50 @@ diccionario `_instances`. En el caso que existiera lo devuelve y en el caso de q
 Ya que sin `lock` dos hilos podrian verificar `cls not in cls._instances` a la vez y crear dos instancias pero si se utiliza `with cls._lock:` solo un hilo ejecuta el bloque a la vez y esto garantiza que el segundo hilo espere y utilice la instancia creada por el primero
 
 ### **2. Factory**
+#### Tarea: Detalla cómo la fábrica encapsula la creación de `null_resource` y el propósito de sus `triggers`.
+* En el caso de encapsulacion del `null_resource` la fabrica se centra la logica de la creacion del metodo en el metodo estatico `create` el cual genera un diiccionario con estructura JSON para un `null_resource` de Terraform
 
+    ```python
+    @staticmethod
+    def create(name: str, triggers: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        triggers = triggers or {}
+        triggers.setdefault("factory_uuid", str(uuid.uuid4()))
+        triggers.setdefault("timestamp", datetime.utcnow().isoformat())
+        return {
+            "resource": [{
+                "null_resource": [{
+                    name: [{
+                        "triggers": triggers
+                    }]
+                }]
+            }]
+        }
+    ```
+    * Existe `abstraccion` ya que el metodo `create` simpplifica la creacion del recurso lo que permite al usuario solo pasar como parametro `name` y opcional el diccionnario de `triggers` ya que la fabrica construye la estructura JSON y esto elimina la necesidad de que el usuario escriba manualmente todo el formato en Terraform
+
+    * Tambien hay `consistencia` ya que existe garantia de que los recursos sigan la misma estructura 
+
+        ```json
+        "resource": [{
+                    "null_resource": [{
+                        name: [{
+                            "triggers": triggers
+                        }]
+                    }]
+                }]
+        ```
+        esto asegura que sea compatible con terraform
+
+* Para el proposito de los `triggers` en un `null_resource` son diccionarios que determina cuando Terraform debe recrear o actualizar el recurso. 
+    * Trigger `factory_uuid`: es el identificador unico generado con `uuid.uuid4()` esto asegura que cada recurso que se crea tenga un valor unico, este valor cambia en cada ejecucion
+        ```python
+        triggers.setdefault("factory_uuid", str(uuid.uuid4()))
+        ```
+    * Trigger `timestamp`: el timestamp basado en la hora en formato UTC, este valor cambia en cada ejecucion
+        ```python
+        triggers.setdefault("timestamp", datetime.utcnow().isoformat())
+        ```
+    Estos `triggers` hacen que cada vez se crea de nuevo el recurso este se marque como `sucio`  
 
 ### **3. Prototype**
 
