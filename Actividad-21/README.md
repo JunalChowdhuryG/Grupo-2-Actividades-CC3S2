@@ -34,6 +34,56 @@ Ya que sin `lock` dos hilos podrian verificar `cls not in cls._instances` a la v
 
 ### **3. Prototype**
 
+**Tarea**: Dibuja un diagrama UML del proceso de clonación profunda y explica cómo el mutator permite personalizar cada instancia.
+
+#### UML
+- **NullResourceFactory**(Patron Factory)
+    - Clase que crea los recursos basicos ```null_resource``` usando la configuracion global definida en ```ConfigSingleton ```
+- **ResourcePrototype**(Patron Prototype)
+    - Implementa el patrón Prototype para clonar recursos sin alterar el original.
+    - Es reutilizado por el Factory y enviado a ```CompositeModule```.
+- **CompositeModule**(Patron  Composite)
+    - Agrupa multiples recursos en un solo módulo
+    - Recibe clones de ```ResourcePrototype```
+- **InfrastructureBuilder**(Usa los 3 patrones)
+    - Orquesta la construcción de la infraestructura local en Terraform.
+    - Usa ```CompositeModule``` para la creacion de recursos
+- **ConfigSingleton** 
+    - Configuracion global del entorno
+   
+```python
+InfrastructureBuilder
+    -> usa NullResourceFactory → crea prototipo base
+        -> se clona con ResourcePrototype + mutator
+            -> se agregan recursos a CompositeModule
+                -> exporta archivo Terraform JSON
+ConfigSingleton -> mantiene configuración global
+```
+
+![DiagramaUML](./imagenes/DiagramaUML.png)
+
+#### Mutator
+En el patron Prototype el metodo ```clone(mutator)``` hace una copia profunda del objeto prototipo usando ```deepcopy()``` de la libreria ```copy``` que hace que el clon sea independiente al original y que sus cambios no afecten al prototipo original. 
+
+En especifico la funcion ```mutator``` que se encuentra en ```builder.py``` recibe el clon ya duplicado como argumento(en este caso un dict) y  modifica los campos especificos definidos en el codigo en nuestro caso el nombre e insertamos un trigger del indice pero podriamos expandirlo segun nuestras necesidades.
+
+Funcion mutator: 
+```python
+def mutator(d: Dict[str, Any], idx=i) -> None:
+                """
+                Función mutadora: modifica el nombre del recurso clonado
+                e inserta un trigger identificador con el índice correspondiente.
+                """
+                res_block = d["resource"][0]["null_resource"][0]
+                # Nombre original del recurso (por defecto "placeholder")
+                original_name = next(iter(res_block.keys()))
+                # Nuevo nombre válido: empieza con letra y contiene índice
+                new_name = f"{original_name}_{idx}"
+                # Renombramos la clave en el dict
+                res_block[new_name] = res_block.pop(original_name)
+                # Añadimos el trigger de índice
+                res_block[new_name][0]["triggers"]["index"] = idx
+```
 
 ### **4. Composite**
 
