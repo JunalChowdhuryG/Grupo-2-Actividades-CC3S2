@@ -132,6 +132,96 @@ def mutator(d: Dict[str, Any], idx=i) -> None:
 
 
 ### **5. Builder**
+Este se encarga de sabar cómo estrucuturar un null_resource básico con sus triggers por defecto. El builder simplemente solicita un "modelo" de null_resource
 
+En add_custom_resource
+
+```python
+
+def add_custom_resource(self, name: str, triggers: Dict[str, Any]) -> "InfrastructureBuilder":
+        """
+        Agrega un recurso null personalizado al módulo compuesto.
+
+        Args:
+            name: nombre del recurso.
+            triggers: diccionario de triggers personalizados.
+        Returns:
+            self: permite encadenar llamadas.
+        """
+        self._module.add(NullResourceFactory.create(name, triggers))
+        return self
+
+
+```
+
+De la misma manera, el builder utiliza NullResourceFactory para generar la estructura correcta de null_resource
+
+### Orquestación de Prototype
+
+En build_null_fleet
+
+```python
+        for i in range(count):
+            def mutator(d: Dict[str, Any], idx=i) -> None:
+                """
+                Función mutadora: modifica el nombre del recurso clonado
+                e inserta un trigger identificador con el índice correspondiente.
+                """
+                res_block = d["resource"][0]["null_resource"][0]
+                # Nombre original del recurso (por defecto "placeholder")
+                original_name = next(iter(res_block.keys()))
+                # Nuevo nombre válido: empieza con letra y contiene índice
+                new_name = f"{original_name}_{idx}"
+                # Renombramos la clave en el dict
+                res_block[new_name] = res_block.pop(original_name)
+                # Añadimos el trigger de índice
+                res_block[new_name][0]["triggers"]["index"] = idx
+```
+
+Para crear el fleet dentro del bucle for, el Builder no recrea cada null_resource desde cero, sino usa el prototipo `clone = base_proto.clone(mutator).data `
+(copia profunda)
+
+La función mutator es crucial para el patrón Prototype, ya que permite realizar modificaciones específicas en la copia clonada (cambiar el nombre y añadir un index al trigger)
+
+### Orquestación de Composite y generación del JSON final
+
+En
+
+```python
+__init__:
+    self._module = CompositeModule()
+```
+
+El Builder mantiene una única instancia de CompositeModule, el cual irá construyendo de manera incremental.
+
+`self._module.add(clone)`
+
+`self._module.add(NullResourceFactory.create(name, triggers)) `
+
+Después de que Factory y Prototype crean recursos, el Builder los agrega al CompositeModule utilizando el método add.
+
+En
+
+```python
+     def export(self, path: str) -> None:
+        """
+        Exporta el módulo compuesto a un archivo JSON compatible con Terraform.
+
+        Args:
+            path: ruta de destino del archivo `.tf.json`.
+        """
+        data = self._module.export()
+
+        # Asegura que el directorio destino exista
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        # Escribe el archivo con indentación legible
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+
+        print(f"[Builder] Terraform JSON escrito en: {path}")
+```
+
+Cuando es momento de finalizar la construcción, el Builder le pide al CompositeModule que exporte todos los recursos que ha recolectado. Luego los unifica y formatea un una estructura que Terraform pueda utilizar.a
 
 ## **Fase 2: Ejercicios prácticos**
